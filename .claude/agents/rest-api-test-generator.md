@@ -1,7 +1,6 @@
 ---
 name: rest-api-test-generator
 description: Use this agent to generate new test classes or add test methods for the RestAPIFWDesignApr2026 framework. Knows all framework conventions: BaseTest, RestClient verbs, AuthType, ConfigManager, POJO builders, TestNG + Allure annotations, and when to bypass RestClient for negative tests. Invoke when asked to add tests for a new endpoint, API, or scenario.
-model: claude-sonnet-4-5
 tools:
   - Read
   - Write
