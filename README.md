@@ -557,3 +557,166 @@ Agent Team (parallel where safe):
 #### Current Limitation Note
 
 Custom subagent types (e.g. `subagent_type: "rest-api-test-generator"`) require a model that matches the team's allowed list. In this repo, **use `subagent_type: "fork"`** inside Workflow scripts — forks always inherit the session model (`tm-sonnet-4-6`) and bypass this restriction entirely. The `Workflow` tool itself is unaffected and works normally.
+
+---
+
+### Agent View — Monitoring and Observing Agents
+
+> **Note:** This section explains how to observe, communicate with, and control agents while they run — the operational side of working with agents in Claude Code.
+
+#### What is Agent View?
+
+Agent View is how you see what is happening inside running agents — their status, progress, output, and whether they succeeded or failed. Claude Code provides several mechanisms depending on whether you spawned a single agent, a multi-agent workflow, or a background task.
+
+```
+You (main session)
+  ├── spawned Agent A  →  running... how do I know when it's done?
+  ├── spawned Agent B  →  failed?   how do I see why?
+  └── spawned Workflow →  3 phases, 8 agents... which ones finished?
+```
+
+---
+
+#### Observability Tools
+
+| Tool / Command | What it shows |
+|----------------|--------------|
+| `ListAgents` | All agents currently reachable — in-process subagents, other local sessions |
+| `/workflows` | Live progress tree for running Workflow scripts — phase names, agent labels, pass/fail per agent |
+| `TaskOutput` | Fetch stdout/stderr from a background Bash or remote task |
+| `Monitor` | Stream live events from a long-running process line by line |
+| `SendMessage` | Send a message to a named running agent |
+| `TaskStop` | Kill a running background agent or task |
+
+---
+
+#### Lifecycle of an Agent — What You See
+
+```
+1. You invoke: Agent({ prompt: "...", subagent_type: "fork" })
+       ↓
+2. Claude Code launches the agent in the background
+   → Returns: agentId (internal), output_file path
+       ↓
+3. Agent runs (reads files, writes code, compiles)
+   → You see: "[agent is running]" in UI; you can do other work
+       ↓
+4. Agent finishes
+   → A <task-notification> arrives automatically with:
+       status: completed | failed
+       result: the agent's final text output
+       usage: tokens used, tool calls made, duration
+       ↓
+5. You read the result and decide what to do next
+   (review the diff, commit, ask for changes)
+```
+
+---
+
+#### Workflow Progress View (`/workflows`)
+
+When a `Workflow` script is running, `/workflows` shows a live tree:
+
+```
+▸ add-api-coverage  [running — 32s]
+  ✔ Generate POJOs
+    ✔ pojo-writer          [done, 8s]
+  ⟳ Write Tests + Review POJOs
+    ✔ test-writer          [done, 14s]
+    ⟳ pojo-reviewer        [running...]
+  ○ Register in Suite + Compile
+    ○ suite-updater        [waiting]
+```
+
+Each row is one `agent()` call in the script. `✔` = completed, `⟳` = in progress, `○` = not yet started, `✗` = failed. The phase grouping comes from the `phase()` calls and the `label:` option on each `agent()` call.
+
+---
+
+#### Communicating with a Running Agent
+
+If an agent is still running and you need to redirect it, use `SendMessage`:
+
+```
+ListAgents()           ← find the agent's name
+SendMessage({
+  to: "pojo-writer",
+  message: "Also add a field: trackingNumber (String)"
+})
+```
+
+The message is queued and delivered at the agent's next tool round. This works for in-process subagents and other Claude Code sessions on the same machine.
+
+---
+
+#### Reading Agent Output
+
+Every spawned agent writes its result to an `output_file`. **Do not `cat` or `Read` this file directly** — it is a full JSONL transcript and will overflow your context window. Instead:
+
+- For **completed agents**: the result is in the `<task-notification>` automatically delivered to your session.
+- For **Workflow agents**: read `.output` journals under the session transcript directory only when debugging a failure — and only the specific `agent-<id>.jsonl` for the failing agent, not the entire transcript.
+- For **background Bash tasks**: `TaskOutput({ task_id: "..." })` fetches stdout/stderr safely.
+
+---
+
+#### Stopping an Agent
+
+```
+TaskStop({ task_id: "agent-name" })   ← stop by name
+TaskStop({ task_id: "abc123" })       ← stop by agentId
+```
+
+Use this when:
+- An agent is taking too long and you want to redirect it
+- A Workflow phase produced bad output and continuing is pointless
+- You realise the prompt was wrong mid-run
+
+---
+
+#### Practical Agent View Examples for This Repo
+
+**Check if a previously spawned test-generator is still running:**
+```
+ListAgents()
+→ shows: rest-api-test-generator [running] or no results if it completed
+```
+
+**Watch a long Maven test suite run line by line:**
+```
+Monitor({
+  command: "JAVA_HOME=$(/usr/libexec/java_home -v 11) mvn test -Dtest=SaveFreightInvoiceTest 2>&1 | grep --line-buffered -E 'PASSED|FAILED|ERROR|Tests run'",
+  description: "SaveFreightInvoiceTest live results"
+})
+→ Each matching line fires a notification as it happens
+```
+
+**Track a Workflow running coverage generation across 5 APIs:**
+```
+/workflows
+→ see which API's test-writer finished, which is still running, which failed
+```
+
+**Kill a stuck agent and restart with a corrected prompt:**
+```
+TaskStop({ task_id: "test-writer" })
+Agent({ subagent_type: "fork", prompt: "corrected prompt here..." })
+```
+
+---
+
+#### Agent View vs Agent Teams — How They Work Together
+
+```
+Agent Teams  →  how you DESIGN and ORCHESTRATE work across agents
+Agent View   →  how you OBSERVE and CONTROL agents while they run
+```
+
+They are complementary. You design a team in a Workflow script (Agent Teams), then use Agent View tools (`/workflows`, `ListAgents`, `SendMessage`, `TaskStop`) to monitor its execution and intervene if needed.
+
+| You want to... | Use |
+|----------------|-----|
+| See which agents are running | `ListAgents` |
+| Watch a workflow's live progress | `/workflows` |
+| Get an agent's final output | Read the `<task-notification>` result |
+| Send mid-flight instructions | `SendMessage` |
+| Stop a misbehaving agent | `TaskStop` |
+| Watch live test output line by line | `Monitor` |
