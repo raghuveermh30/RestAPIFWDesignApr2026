@@ -1,0 +1,152 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE suite SYSTEM "https://testng.org/testng-1.0.dtd">
+
+<!--
+  LEARNING SUITE — covers all concepts in this framework
+  Run: mvn test -DsuiteXmlFile=src/test/resources/testrunners/learning_suite.xml
+
+  Grouped by concept so you can read them top-to-bottom as a learning path:
+    1. CRUD basics       → GoRest GET / POST / PUT / PATCH / DELETE
+    2. Negative testing  → 401 / 404 / 422 scenarios
+    3. Data-driven       → Inline @DataProvider, Excel, CSV
+    4. Deserialization   → POJO deserialization with Jackson
+    5. Schema validation → JSON schema contract tests
+    6. Assertion styles  → Hard assert, SoftAssert, response-time, headers
+    7. Auth types        → Bearer, Basic, OAuth2
+    8. WireMock          → API mocking and stubbing
+    9. XML parsing       → XmlPath / GPath
+   10. Full CRUD         → Contacts and ReqRes extended
+-->
+<suite name="Learning Suite" verbose="2">
+
+    <test name="1. GoRest — GET Users">
+        <classes>
+            <class name="com.qa.api.gorest.tests.GetUserTest"/>
+        </classes>
+    </test>
+
+    <test name="2. GoRest — POST Create User (Inline DataProvider)">
+        <classes>
+            <class name="com.qa.api.gorest.tests.CreateUserTest">
+                <methods>
+                    <include name="createUserTest"/>
+                </methods>
+            </class>
+        </classes>
+    </test>
+
+    <test name="3. GoRest — PUT Update User (AAA Pattern)">
+        <classes>
+            <class name="com.qa.api.gorest.tests.UpdateUserTest"/>
+        </classes>
+    </test>
+
+    <test name="4. GoRest — PATCH Partial Update">
+        <classes>
+            <class name="com.qa.api.gorest.tests.PatchUserTest"/>
+        </classes>
+    </test>
+
+    <test name="5. GoRest — DELETE User">
+        <classes>
+            <class name="com.qa.api.gorest.tests.DeleteUserTest"/>
+        </classes>
+    </test>
+
+    <test name="6. Negative Testing — 401, 404, 422">
+        <classes>
+            <class name="com.qa.api.gorest.tests.NegativeGoRestTest"/>
+        </classes>
+    </test>
+
+    <test name="7. Data-Driven — Excel">
+        <classes>
+            <class name="com.qa.api.gorest.tests.CreateUserTest">
+                <methods>
+                    <include name="createUserTestFromExcel"/>
+                </methods>
+            </class>
+        </classes>
+    </test>
+
+    <test name="8. Data-Driven — CSV">
+        <classes>
+            <class name="com.qa.api.gorest.tests.CSVDataDrivenTest"/>
+        </classes>
+    </test>
+
+    <test name="9. Deserialization — POJO from Response">
+        <classes>
+            <class name="com.qa.api.gorest.tests.GetSingleUserWithSerializationTest"/>
+        </classes>
+    </test>
+
+    <test name="10. JSON Schema Validation">
+        <classes>
+            <class name="com.qa.api.scematest.GetUserApiSchemaApiTest"/>
+        </classes>
+    </test>
+
+    <test name="11. SoftAssert — Collect All Failures">
+        <classes>
+            <class name="com.qa.api.assertions.SoftAssertTest"/>
+        </classes>
+    </test>
+
+    <test name="12. Response Validation — Time, Headers, Body">
+        <classes>
+            <class name="com.qa.api.assertions.ResponseValidationTest"/>
+        </classes>
+    </test>
+
+    <test name="13. Products — POJO Deserialization">
+        <classes>
+            <class name="com.qa.api.products.ProductApiTest"/>
+        </classes>
+    </test>
+
+    <test name="14. Products — JsonPath Expressions">
+        <classes>
+            <class name="com.qa.api.products.ProductApiTestWithJsonPath"/>
+        </classes>
+    </test>
+
+    <test name="15. Auth — Basic Auth">
+        <classes>
+            <class name="com.qa.api.basicauth.BasicAuth"/>
+        </classes>
+    </test>
+
+    <test name="16. Auth — Bearer Token (GoRest)">
+        <classes>
+            <class name="com.qa.api.gorest.tests.GetUserTest"/>
+        </classes>
+    </test>
+
+    <test name="17. WireMock — API Mocking and Stubbing">
+        <classes>
+            <class name="com.qa.api.wiremock.WireMockTest"/>
+        </classes>
+    </test>
+
+    <test name="18. XML Response Parsing — XmlPath / GPath">
+        <classes>
+            <class name="com.qa.api.xml.XmlApiTest"/>
+        </classes>
+    </test>
+
+    <test name="19. ReqRes — Full Endpoint Coverage">
+        <classes>
+            <class name="com.qa.api.reqres.tests.ReqResTest"/>
+            <class name="com.qa.api.reqres.tests.ReqResExtendedTest"/>
+        </classes>
+    </test>
+
+    <test name="20. Contacts API — Full CRUD with Token Auth">
+        <classes>
+            <class name="com.qa.api.contacts.test.CreateContactTest"/>
+            <class name="com.qa.api.contacts.test.GetContactsTest"/>
+        </classes>
+    </test>
+
+</suite>

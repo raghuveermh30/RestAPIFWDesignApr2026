@@ -1,0 +1,5 @@
+name,gender,status
+CSVUser_Alpha,male,active
+CSVUser_Beta,female,inactive
+CSVUser_Gamma,male,active
+CSVUser_Delta,female,active
