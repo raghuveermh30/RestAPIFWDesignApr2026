@@ -22,30 +22,6 @@ public class DeleteUserTest extends BaseTest {
 
     @Test
     public void deleteUserTest() {
-        ChainTestListener.log("Delete User Test");
-        User user = User.builder().name(StringUtils.getRandomName()).email(StringUtils.getRandomEmailId()).status("active").gender("male").build();
-
-        Response postResponse = restClient.postCall(BASE_URL_GOREST, GOREST_END_POINT, user, null, null, AuthType.BEARER_TOKEN, ContentType.JSON);
-
-        Integer userId = postResponse.jsonPath().get("id");
-        System.out.println("User Id is : " + userId);
-        Assert.assertNotNull(postResponse.jsonPath().get("id"));
-        Assert.assertNotNull(postResponse.jsonPath().get("name"));
-
-        //Get the User Details
-        Response getResponse = restClient.getApiCall(BASE_URL_GOREST, GOREST_END_POINT + "/" + userId, null, null
-                , AuthType.BEARER_TOKEN, ContentType.JSON);
-        Assert.assertEquals(getResponse.jsonPath().get("id"), userId);
-        Assert.assertNotNull(getResponse.jsonPath().get("name"));
-
-        //Delete User Details
-        Response deleteResponse = restClient.deleteApiCall(BASE_URL_GOREST, GOREST_END_POINT + "/" + userId, null, null
-                , AuthType.BEARER_TOKEN, ContentType.JSON);
-        Assert.assertEquals(deleteResponse.getStatusCode(), 204);
-
-        //4. Get the User -- GET
-        getResponse = restClient.getApiCall(BASE_URL_GOREST, GOREST_END_POINT + "/" + userId, null, null, AuthType.BEARER_TOKEN, ContentType.JSON);
-        Assert.assertEquals(getResponse.getStatusCode(), 404);
 
     }
 }

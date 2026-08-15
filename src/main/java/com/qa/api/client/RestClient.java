@@ -19,6 +19,25 @@ import static io.restassured.RestAssured.*;
 import static org.hamcrest.Matchers.*;
 import static io.restassured.RestAssured.expect;
 
+/**
+ * Generic HTTP client wrapper for the REST API test framework.
+ *
+ * <p>Provides one method per HTTP verb (GET, POST, PUT, PATCH, DELETE). Each method:
+ * <ul>
+ *   <li>Builds a {@link RequestSpecification} via {@code setupRequest()} (auth + content type)</li>
+ *   <li>Attaches query/path params via {@code applyParams()}</li>
+ *   <li>Validates the response against a baked-in {@link ResponseSpecification}</li>
+ *   <li>Logs request and response details via Rest Assured and ChainTest</li>
+ * </ul>
+ *
+ * <p><b>Important:</b> Response specs are fixed per verb. For tests that expect status codes
+ * outside those ranges (e.g. 401, 422, 503), bypass this class and use
+ * {@code RestAssured.given()} directly.
+ *
+ * <p>Auth is selected per call via {@link AuthType}. Credentials are read from
+ * {@link com.qa.api.manager.ConfigManager} at call time, so runtime tokens injected via
+ * {@code ConfigManager.setProp("bearerToken", token)} are picked up automatically.
+ */
 public class RestClient {
 
     //Define Response Spec
@@ -31,6 +50,16 @@ public class RestClient {
     private static final ResponseSpecification responseSpec204or404 = expect().statusCode(anyOf(equalTo(204), equalTo(404)));
 
 
+    /*
+     * Builds a base RequestSpecification with URI, content type, and auth header.
+     * Reads credentials from ConfigManager at call time — runtime tokens are picked up automatically.
+     *
+     * @param baseUrl     base URI for the request
+     * @param authType    auth strategy (BEARER_TOKEN, BASIC_AUTH, API_KEY, NO_AUTH)
+     * @param contentType request and accept content type
+     * @return configured RequestSpecification ready for param attachment and HTTP verb call
+     * @throws APIException if authType is not a recognised value
+     */
     private RequestSpecification setupRequest(String baseUrl, AuthType authType, ContentType contentType) {
         ChainTestListener.log("Base Url is : "+baseUrl);
         RequestSpecification requestSpecification = RestAssured.given().log().all().
@@ -58,6 +87,12 @@ public class RestClient {
         return requestSpecification;
     }
 
+    /*
+     * Base64-encodes "username:password" for the HTTP Basic Authorization header.
+     * Credentials are read from ConfigManager keys: basicUserName and basicPassword.
+     *
+     * @return Base64-encoded credentials string
+     */
     private String generateBasicAuth() {
         String credentials = ConfigManager.getProp("basicUserName") + ":" + ConfigManager.getProp("basicPassword");
         return Base64.getEncoder().encodeToString(credentials.getBytes());
@@ -175,16 +210,18 @@ public class RestClient {
     }
 
     /*
+     * This method is used to call PUT APIs to fully replace a resource.
+     * Response spec enforces HTTP 200.
      *
-     * @param baseUrl
-     * @param endpoint
-     * @param body
-     * @param queryParams
-     * @param pathParams
-     * @param authType
-     * @param contentType
-     * @return
-     * @param <T>
+     * @param baseUrl     base URI
+     * @param endpoint    resource path (may include path param placeholders)
+     * @param body        request body serialized as POJO or String
+     * @param queryParams optional query parameters (null if none)
+     * @param pathParams  optional path parameters (null if none)
+     * @param authType    auth strategy
+     * @param contentType request and accept content type
+     * @param <T>         body type
+     * @return response extracted from the validated PUT call
      */
     @Step("Calling Put Api with base url : {0} , endpoint {1}, File body {2}, QueryParam {3}, PathParam {4}, AuthType {5} and Content Type {6}")
     public <T> Response putApiCall(String baseUrl, String endpoint, T body,
@@ -200,17 +237,18 @@ public class RestClient {
     }
 
     /*
+     * This method is used to call PATCH APIs to partially update a resource.
+     * Response spec enforces HTTP 200.
      *
-     *
-     * @param baseUrl
-     * @param endpoint
-     * @param body
-     * @param queryParams
-     * @param pathParams
-     * @param authType
-     * @param contentType
-     * @return
-     * @param <T>
+     * @param baseUrl     base URI
+     * @param endpoint    resource path (may include path param placeholders)
+     * @param body        partial request body serialized as POJO or String
+     * @param queryParams optional query parameters (null if none)
+     * @param pathParams  optional path parameters (null if none)
+     * @param authType    auth strategy
+     * @param contentType request and accept content type
+     * @param <T>         body type
+     * @return response extracted from the validated PATCH call
      */
     @Step("Calling Patch Api with base url : {0} , endpoint {1}, File body {2}, QueryParam {3}, PathParam {4}, AuthType {5} and Content Type {6}")
     public <T> Response patchApiCall(String baseUrl, String endpoint, T body,
@@ -226,14 +264,16 @@ public class RestClient {
     }
 
     /*
+     * This method is used to call DELETE APIs to remove a resource.
+     * Response spec accepts HTTP 204 (deleted) or 404 (already gone).
      *
-     * @param baseUrl
-     * @param endpoint
-     * @param queryParams
-     * @param pathParams
-     * @param authType
-     * @param contentType
-     * @return
+     * @param baseUrl     base URI
+     * @param endpoint    resource path (may include path param placeholders)
+     * @param queryParams optional query parameters (null if none)
+     * @param pathParams  optional path parameters (null if none)
+     * @param authType    auth strategy
+     * @param contentType request and accept content type
+     * @return response extracted from the validated DELETE call
      */
     @Step("Calling Delete Api with base url : {0} , endpoint {1}, File body {2}, QueryParam {3}, PathParam {4}, AuthType {5} and Content Type {6}")
     public Response deleteApiCall(String baseUrl, String endpoint,
