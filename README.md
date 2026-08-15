@@ -425,5 +425,135 @@ To **create a new agent** for this project, add a new `.md` file under `.claude/
 | **Plain chat** | You talk to Claude directly | Quick questions, small edits, explanations |
 | **Skill** (`/rest-api-fw`) | A packaged instruction set Claude follows | Reference lookups, structured workflows |
 | **Agent** | An isolated Claude sub-process with its own tools | Code generation, parallel tasks, long-running work that would fill the main context |
+| **Agent Team** | Multiple agents coordinated by a Workflow script | Large-scale generation, parallel API coverage, fan-out/fan-in pipelines |
 
 For generating tests: always use the **`rest-api-test-generator` agent** — it runs in isolation, keeps raw file output out of the main chat, and compile-verifies its own output before returning.
+
+---
+
+### Agent Teams — Concept and Application
+
+> **Note:** This section documents the Agent Teams concept and how it maps to this framework. Agent teams are available through Claude Code's `Workflow` tool and work in this repo today.
+
+#### What is an Agent Team?
+
+An agent team is a group of Claude agents assigned different roles and coordinated by a script to accomplish a goal faster and more thoroughly than a single agent could alone. Each agent owns one responsibility; the coordinator script decides the order, parallelism, and how outputs feed into the next stage.
+
+```
+You (coordinator — the engineer)
+  ├── Agent: POJO-Writer      → creates request/response POJOs
+  ├── Agent: Test-Writer      → writes test class (depends on POJOs)
+  ├── Agent: POJO-Reviewer    → reviews POJOs in parallel with Test-Writer
+  └── Agent: Suite-Updater    → registers test in TestNG XML suite
+```
+
+#### Why Teams Beat a Single Agent
+
+| Approach | Steps | Wall-clock time |
+|----------|-------|----------------|
+| Sequential (one agent, one task at a time) | 4 steps in series | Longest |
+| Agent team (parallel where safe) | 3 steps — review overlaps with test writing | Faster |
+
+Independent work runs simultaneously. Dependent work waits. The coordinator script expresses this with `parallel()` and `pipeline()`.
+
+#### How It Works in This Framework
+
+The `Workflow` tool accepts a JavaScript orchestration script. Here is a real example for adding full coverage for a new API in this repo:
+
+```javascript
+// Invoke with: Workflow({ script: `...` })
+
+export const meta = {
+  name: 'add-api-coverage',
+  description: 'Generate POJOs, tests, reviewer check, and suite registration for a new API',
+  phases: [
+    { title: 'Generate POJOs' },
+    { title: 'Write Tests + Review POJOs' },
+    { title: 'Register in Suite + Compile' },
+  ]
+}
+
+// ── Phase 1: POJOs first — everything else depends on them ──────────────────
+phase('Generate POJOs')
+const pojoResult = await agent(`
+  Create ShipmentRequest.java and ShipmentResponse.java in
+  src/main/java/com/qa/api/pojo/shipment/.
+  Use @Data @Builder @NoArgsConstructor @AllArgsConstructor @JsonInclude(NON_NULL).
+  Use @JsonProperty for all PascalCase field names.
+  Fields: shipmentId (String), carrierId (String), origin (String),
+          destination (String), status (String), totalWeight (Double).
+`, { label: 'pojo-writer', phase: 'Generate POJOs' })
+
+// ── Phase 2: Write tests AND review POJOs in parallel ───────────────────────
+phase('Write Tests + Review POJOs')
+const [testResult, reviewResult] = await parallel([
+
+  () => agent(`
+    Create ShipmentTest.java in src/test/java/com/qa/api/shipment/tests/.
+    Extend BaseTest. Add @BeforeClass to inject bearer token via ConfigManager.
+    Write three @Test methods:
+      1. getShipmentTest        — GET /shipments, assert 200, use BEARER_TOKEN
+      2. getShipmentNotFoundTest — GET /shipments/INVALID, use RestAssured.given()
+                                   directly (NOT RestClient), assert 404
+      3. createShipmentTest     — POST with ShipmentRequest POJO, assert 201,
+                                   assert shipmentId not null
+    Follow the same style as UpdateUserTest.java.
+    ChainTestListener.log() must be the first line of every @Test method.
+  `, { label: 'test-writer', phase: 'Write Tests + Review POJOs' }),
+
+  () => agent(`
+    Review src/main/java/com/qa/api/pojo/shipment/ for correctness.
+    Check: @JsonProperty present on every field, @JsonInclude(NON_NULL) at class level,
+    all four Lombok annotations present (@Data @Builder @NoArgsConstructor @AllArgsConstructor),
+    no magic strings, no raw types.
+    Report any issues found (or "LGTM" if clean).
+  `, { label: 'pojo-reviewer', phase: 'Write Tests + Review POJOs' })
+
+])
+
+// ── Phase 3: Register test in suite, then compile ───────────────────────────
+phase('Register in Suite + Compile')
+await agent(`
+  Add ShipmentTest to src/test/resources/testrunners/testng_regression.xml.
+  Follow the exact same <class name="..."> pattern used by the existing entries.
+  Then run: JAVA_HOME=$(/usr/libexec/java_home -v 11) mvn compile -q
+  Report compile result (clean or error output).
+`, { label: 'suite-updater', phase: 'Register in Suite + Compile' })
+
+return { pojoResult, testResult, reviewResult }
+```
+
+#### Timeline Visualised
+
+```
+Sequential (no team):
+  |── POJO-Writer ──|── Test-Writer ──|── POJO-Reviewer ──|── Suite-Updater ──|
+
+Agent Team (parallel where safe):
+  |── POJO-Writer ──|── Test-Writer ────────|── Suite-Updater ──|
+                    |── POJO-Reviewer ──|
+                         ↑ these two overlap
+```
+
+#### Key Rules for Agent Teams
+
+| Rule | Reason |
+|------|--------|
+| Agents that share file dependencies run sequentially | Prevent race conditions on the same file |
+| Agents doing independent work run in `parallel()` | Safe overlap — different files, no shared state |
+| Never let an agent push or merge | Human-only — coordinator reviews first |
+| Each agent gets one clear responsibility | Focused context = better output quality |
+| Compile-verify as the last step | Catches import errors and type mismatches across all generated files |
+
+#### When to Use Agent Teams in This Project
+
+| Scenario | Team pattern |
+|----------|-------------|
+| New API: POJO + test + suite registration | Pipeline (POJO → Tests ‖ Review → Register) |
+| Add tests for multiple APIs at once | `parallel()` fan-out, one test-writer per API |
+| Large diff: review across multiple dimensions | `parallel()` with correctness / security / coverage reviewers |
+| Audit entire test suite for coverage gaps | Fan-out one finder agent per package, synthesize gaps |
+
+#### Current Limitation Note
+
+Custom subagent types (e.g. `subagent_type: "rest-api-test-generator"`) require a model that matches the team's allowed list. In this repo, **use `subagent_type: "fork"`** inside Workflow scripts — forks always inherit the session model (`tm-sonnet-4-6`) and bypass this restriction entirely. The `Workflow` tool itself is unaffected and works normally.
