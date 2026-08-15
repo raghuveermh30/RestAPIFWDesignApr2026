@@ -89,7 +89,7 @@ The `AuthType` enum drives auth selection inside `RestClient`:
 | OAuth 2.0      | Client credentials flow via ScribeJava / form params |
 
 ### 4. POJO-Based Serialization
-Jackson + Lombok POJOs (`User`, `Products`, `Credentials`) are used for both request body construction and response deserialization. `ObjectMapperUtils` handles JSON↔POJO conversion.
+Jackson + Lombok POJOs (`User`, `Products`, `Credentials`) are used for both request body construction and response deserialization. `JsonUtil.deserialize(response, MyClass.class)` handles response → POJO conversion.
 
 ### 5. JSON Schema Validation
 `SchemaValidator` and Rest Assured's `json-schema-validator` module validate API responses against JSON Schema files stored in `src/test/resources/schema/`. This catches contract regressions early.
@@ -237,3 +237,193 @@ mvn test -DsuiteXmlFile=src/test/resources/testrunners/learning_suite.xml
 4. Write a test class under `src/test/java/com/qa/api/<module>/tests/`.
 5. Inject `RestClient` and call the appropriate method (`getApiCall`, `postCall`, `putApiCall`, etc.).
 6. Register the new test class in a TestNG XML suite file.
+
+---
+
+## Agent View in Claude Code
+
+This project is set up to work with **Claude Code agents** — specialised AI sub-processes that can generate, review, and extend the framework automatically. This section explains what agents are, which ones are configured for this repo, and how to use them day-to-day.
+
+---
+
+### What Are Claude Code Agents?
+
+In Claude Code, an **agent** is an isolated sub-instance of Claude that you can spawn to carry out a focused task — reading files, writing code, running the compiler — independently from the main chat session.
+
+```
+You (main session)
+  └── spawns Agent A  ←── reads framework files, generates POJO + test class
+  └── spawns Agent B  ←── runs code review on the same diff in parallel
+        ↓
+  Results returned to main session
+```
+
+Agents are used for three patterns:
+
+| Pattern | When to use |
+|---------|------------|
+| **Single focused agent** | Generate one test class, review one file |
+| **Parallel agents** | Run two independent tasks simultaneously (e.g. generate GoRest + ReqRes tests at the same time) |
+| **Workflow (multi-agent pipeline)** | Orchestrate fan-out/fan-in across many files or APIs |
+
+---
+
+### Agents Configured in This Repo
+
+#### 1. `rest-api-test-generator` *(project-specific)*
+
+**Definition:** `.claude/agents/rest-api-test-generator.md`
+
+This is the primary agent for this framework. It has deep knowledge of:
+
+| Knowledge area | Detail |
+|----------------|--------|
+| `BaseTest` fields | All `BASE_URL_*` constants, endpoint constants, `restClient` |
+| `RestClient` API | All verb methods, their signatures, and their fixed `ResponseSpecification` ranges |
+| Auth patterns | `BEARER_TOKEN` via `@BeforeClass` + `ConfigManager.setProp()`, `BASIC_AUTH`, `NO_AUTH`, OAuth2 form |
+| POJO conventions | Lombok `@Data @Builder @JsonInclude(NON_NULL)`, `@JsonProperty` for non-camelCase APIs |
+| Negative testing rule | Must use `RestAssured.given()` directly for 401/422/503 — never `RestClient` |
+| TestNG annotations | `@Test`, `@BeforeClass`, `@DataProvider`, `@Test(enabled = false)` |
+| Allure annotations | `@Epic`, `@Story`, `@Severity`, `@Description`, `@Owner` |
+| Logging | `ChainTestListener.log()` as the first line of every `@Test` body |
+| Data-driven | Inline `@DataProvider`, `ExcelUtils.readDataFromExcel()`, `CSVReaderUtil.readDataFromCSV()` |
+| Compile verification | Runs `mvn compile` with Java 11 after writing files |
+
+**When to invoke it:**
+- Adding tests for a new endpoint or API
+- Extending an existing test class with new scenarios
+- Creating POJOs for a new API's request/response model
+
+---
+
+#### 2. Built-in Agent Types
+
+These are always available regardless of project:
+
+| Agent type | Best for |
+|------------|---------|
+| `claude` | General-purpose tasks — explanation, refactoring, debugging |
+| `Explore` | Fast read-only code search — "where is X defined?", "which files reference Y?" |
+| `Plan` | Architecture and implementation planning before writing code |
+| `claude-code-guide` | Questions about Claude Code CLI itself — hooks, settings, slash commands |
+| `general-purpose` | Multi-step research and investigation across many files |
+
+---
+
+### How to Invoke Agents
+
+#### Option 1 — Natural language (Claude routes automatically)
+
+Just describe what you want. Claude will delegate to the appropriate agent:
+
+```
+"Using the rest-api-test-generator agent, add tests for this API: <paste request/response>"
+```
+
+```
+"Review the current diff for bugs"          → triggers code-review skill (background agent)
+"Where is SchemaValidator used?"            → triggers Explore agent
+"Plan how to add a new auth type"           → triggers Plan agent
+```
+
+#### Option 2 — Explicit slash command
+
+```
+/agent rest-api-test-generator  Generate CRUD tests for the Products API
+```
+
+#### Option 3 — Parallel agents (two APIs at once)
+
+Ask Claude to fan out:
+
+```
+"Using parallel agents: Agent 1 adds negative tests (401/422) for GoRest.
+ Agent 2 adds DELETE + verify-404 tests for the Contacts API."
+```
+
+Both agents work simultaneously. Claude merges and commits the results.
+
+---
+
+### Practical Examples for This Framework
+
+#### Generate a full test class from an API contract
+
+Paste the request/response JSON and say:
+
+```
+Using the rest-api-test-generator agent, generate tests for this API:
+
+POST https://your-api.com/v1/orders
+Auth: Bearer token
+
+Request: { "customerId": "C001", "productId": "P123", "quantity": 2 }
+Response 201: { "orderId": "ORD-9876", "status": "PLACED", "totalAmount": 49.99 }
+Response 422: { "error": "quantity must be >= 1" }
+Response 401: unauthorized
+```
+
+The agent will produce:
+- A POJO class (`Order.java`) in `src/main/java/com/qa/api/pojo/`
+- A test class with `@BeforeClass` auth setup, happy-path `@Test`, and negative tests
+- Assertions using `response.jsonPath().get(...)` for the fields that matter
+- `JAVA_HOME=$(/usr/libexec/java_home -v 11) mvn compile -q` verification
+
+#### Run a code review before committing
+
+```
+/review
+```
+
+or
+
+```
+"Review the current diff and report findings"
+```
+
+The code-review agent analyses staged changes across correctness, Javadoc, encoding, and test-coverage dimensions — the same review that caught 5 bugs in this repo's commit history.
+
+#### Find where something is defined
+
+```
+"Where is ConfigManager.setProp used across all test classes?"
+```
+
+The Explore agent searches the codebase and returns file paths and line numbers without touching anything.
+
+#### Plan before building
+
+```
+"Plan how to add XML schema validation support to this framework"
+```
+
+The Plan agent reads the existing code, proposes an approach with file-by-file steps, and waits for your approval before any code is written.
+
+---
+
+### Agent File Locations
+
+```
+.claude/
+├── agents/
+│   └── rest-api-test-generator.md   ← project-specific agent definition
+└── skills/
+    └── rest-api-fw/
+        └── SKILL.md                  ← framework reference loaded by agents and skills
+```
+
+To **modify the agent** (add new framework knowledge, change its behaviour), edit `.claude/agents/rest-api-test-generator.md` directly. Changes take effect immediately on the next invocation — no restart required.
+
+To **create a new agent** for this project, add a new `.md` file under `.claude/agents/` with a `name`, `description`, `model`, `tools` list, and a system prompt body.
+
+---
+
+### Agent vs Skill vs Plain Chat
+
+| Mechanism | What it is | Best for |
+|-----------|-----------|---------|
+| **Plain chat** | You talk to Claude directly | Quick questions, small edits, explanations |
+| **Skill** (`/rest-api-fw`) | A packaged instruction set Claude follows | Reference lookups, structured workflows |
+| **Agent** | An isolated Claude sub-process with its own tools | Code generation, parallel tasks, long-running work that would fill the main context |
+
+For generating tests: always use the **`rest-api-test-generator` agent** — it runs in isolation, keeps raw file output out of the main chat, and compile-verifies its own output before returning.
