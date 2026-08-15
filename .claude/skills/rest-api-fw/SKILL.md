@@ -179,11 +179,12 @@ Common error codes tested: **401** (no/invalid token), **404** (resource not fou
 Schemas live in `src/test/resources/schema/`.
 
 ```java
-boolean valid = SchemaValidator.validateSchema(response, "get-user-schema.json");
+// Path is classpath-relative — must include the "schema/" prefix
+boolean valid = SchemaValidator.validateSchema(response, "schema/get-user-schema.json");
 Assert.assertTrue(valid, "Schema validation failed");
 ```
 
-`SchemaValidator` wraps Rest Assured's built-in JSON Schema Validator.
+`SchemaValidator` wraps Rest Assured's built-in JSON Schema Validator. Schema files live in `src/test/resources/schema/` — always pass the path as `"schema/<filename>"` because `matchesJsonSchemaInClasspath` resolves from the classpath root.
 
 ---
 
@@ -255,11 +256,16 @@ public void stopWireMock() {
 Requires a WireMock stub (or real API) returning `Content-Type: application/xml`.
 
 ```java
-// Single value via GPath
-String circuitName = XmlPathUtil.read(response, "MRData.CircuitTable.Circuit[0].circuitName");
+// Single value via GPath — path matches the WireMock stub XML structure used in XmlApiTest
+String circuitName = XmlPathUtil.read(response, "circuits.circuit[0].name");
+String circuitCity = XmlPathUtil.read(response, "circuits.circuit[0].city");
 
 // List of values
-List<String> names = XmlPathUtil.readList(response, "MRData.CircuitTable.Circuit.circuitName");
+List<String> names    = XmlPathUtil.readList(response, "circuits.circuit.name");
+List<String> countries = XmlPathUtil.readList(response, "circuits.circuit.country");
+
+// Attribute access (prefix @)
+List<String> ids = XmlPathUtil.readList(response, "circuits.circuit.@id");
 ```
 
 ---
