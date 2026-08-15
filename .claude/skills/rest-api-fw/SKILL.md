@@ -139,8 +139,17 @@ public void createUserTestFromExcel(String name, String gender, String status) {
 ```
 
 ### CSV (`create_users.csv`)
-`CSVReaderUtil.readCSV()` skips the header row automatically.
+`CSVReaderUtil.readDataFromCSV(filePath)` skips the header row automatically.
 See `CSVDataDrivenTest` for the full pattern.
+
+```java
+@DataProvider(name = "csvUserData")
+public Object[][] getUserDataFromCSV() {
+    return CSVReaderUtil.readDataFromCSV(AppConstants.CREATE_USER_CSV_PATH);
+}
+@Test(dataProvider = "csvUserData")
+public void createUserFromCSVTest(String name, String gender, String status) { ... }
+```
 
 ---
 
@@ -260,11 +269,8 @@ List<String> names = XmlPathUtil.readList(response, "MRData.CircuitTable.Circuit
 POJOs are in `src/main/java/com/qa/api/pojo/` — all annotated with `@JsonInclude(NON_NULL)` and Lombok.
 
 ```java
-// Via JsonUtil wrapper
+// Via JsonUtil wrapper (the correct utility — ObjectMapperUtils is empty and unused)
 User user = JsonUtil.deserialize(response, User.class);
-
-// Via ObjectMapperUtils
-User user = ObjectMapperUtils.toObject(response.asString(), User.class);
 ```
 
 ---
@@ -276,7 +282,7 @@ User user = ObjectMapperUtils.toObject(response.asString(), User.class);
 | `StringUtils` | `getRandomEmailId()` | Unique email per run (timestamp-based) |
 | `StringUtils` | `getRandomName()` | Unique name per run |
 | `ExcelUtils` | `readDataFromExcel(sheetName)` | `Object[][]` from `.xlsx` |
-| `CSVReaderUtil` | `readCSV(path)` | `Object[][]` from `.csv`, skips header |
+| `CSVReaderUtil` | `readDataFromCSV(filePath)` | `Object[][]` from `.csv`, skips header |
 | `JsonPathValidatorUtil` | `read(response, path)` | Single value via JayWay JsonPath |
 | `JsonPathValidatorUtil` | `readList(response, path)` | List via JayWay JsonPath |
 | `XmlPathUtil` | `read(response, gpath)` | Single value via GPath |
