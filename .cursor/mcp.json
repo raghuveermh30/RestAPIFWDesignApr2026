@@ -1,0 +1,13 @@
+{
+  "mcpServers": {
+    "metis-workflow": {
+      "args": [],
+      "command": "/Users/rhanumantharaya/.manh/metis/bin/metis-workflow",
+      "env": {
+        "METIS_API_URL": "https://metis-api-798589175861.us-central1.run.app",
+        "METIS_CLI_VERSION": "v0.2.45",
+        "METIS_WORKSPACE": "/Users/rhanumantharaya/Desktop/Automation/RestAPIFWDesignApr2026"
+      }
+    }
+  }
+}
