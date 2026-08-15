@@ -12,6 +12,7 @@ import io.restassured.specification.RequestSpecification;
 import io.restassured.specification.ResponseSpecification;
 
 import java.io.File;
+import java.nio.charset.StandardCharsets;
 import java.util.Base64;
 import java.util.Map;
 
@@ -50,7 +51,7 @@ public class RestClient {
     private static final ResponseSpecification responseSpec204or404 = expect().statusCode(anyOf(equalTo(204), equalTo(404)));
 
 
-    /*
+    /**
      * Builds a base RequestSpecification with URI, content type, and auth header.
      * Reads credentials from ConfigManager at call time — runtime tokens are picked up automatically.
      *
@@ -87,7 +88,7 @@ public class RestClient {
         return requestSpecification;
     }
 
-    /*
+    /**
      * Base64-encodes "username:password" for the HTTP Basic Authorization header.
      * Credentials are read from ConfigManager keys: basicUserName and basicPassword.
      *
@@ -95,7 +96,7 @@ public class RestClient {
      */
     private String generateBasicAuth() {
         String credentials = ConfigManager.getProp("basicUserName") + ":" + ConfigManager.getProp("basicPassword");
-        return Base64.getEncoder().encodeToString(credentials.getBytes());
+        return Base64.getEncoder().encodeToString(credentials.getBytes(StandardCharsets.UTF_8));
 
     }
 

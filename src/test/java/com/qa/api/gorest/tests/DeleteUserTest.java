@@ -22,6 +22,34 @@ public class DeleteUserTest extends BaseTest {
 
     @Test
     public void deleteUserTest() {
+        ChainTestListener.log("Delete User Test");
 
+        // Create a user to delete
+        User user = User.builder()
+                .name(StringUtils.getRandomName())
+                .email(StringUtils.getRandomEmailId())
+                .gender("male")
+                .status("active")
+                .build();
+
+        Response postResponse = restClient.postCall(BASE_URL_GOREST, GOREST_END_POINT, user, null, null,
+                AuthType.BEARER_TOKEN, ContentType.JSON);
+        Integer userId = postResponse.jsonPath().get("id");
+        Assert.assertNotNull(userId, "User ID should not be null after creation");
+
+        // Verify the user exists
+        Response getResponse = restClient.getApiCall(BASE_URL_GOREST, GOREST_END_POINT + "/" + userId,
+                null, null, AuthType.BEARER_TOKEN, ContentType.JSON);
+        Assert.assertEquals(getResponse.jsonPath().get("id"), userId);
+
+        // Delete the user
+        Response deleteResponse = restClient.deleteApiCall(BASE_URL_GOREST, GOREST_END_POINT + "/" + userId,
+                null, null, AuthType.BEARER_TOKEN, ContentType.JSON);
+        Assert.assertEquals(deleteResponse.statusCode(), 204, "Expected 204 No Content on delete");
+
+        // Verify the user is gone
+        Response getAfterDelete = restClient.getApiCall(BASE_URL_GOREST, GOREST_END_POINT + "/" + userId,
+                null, null, AuthType.BEARER_TOKEN, ContentType.JSON);
+        Assert.assertEquals(getAfterDelete.statusCode(), 404, "Expected 404 after deletion");
     }
 }
